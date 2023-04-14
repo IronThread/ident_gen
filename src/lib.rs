@@ -1,3 +1,5 @@
+//! Little crate exporting a generator of identifiers.
+
 #![no_std]
 
 extern crate alloc;
@@ -98,16 +100,16 @@ impl<'a> IdentGen<'a> {
             }
         } else if i == 0 {
             &self.ident
-        } else {
-            let a = get_last_char(&self.ident);
-            let x = self.table.iter().copied().position(|y| a == y).unwrap();
+        } else { // ident = ca // i = -1
+            let a = get_last_char(&self.ident); // a table = [a,b,c]
+            let x = self.table.iter().copied().position(|y| a == y).unwrap(); // x = 0
 
-            let y = i + x as isize;
+            let y = i + x as isize; // y = -1
 
             if i < 0 {
                 if y < 0 {
                     self.ident.pop();
-                    self.advance(i)
+                    self.advance(i + 1)
                 } else {
                     let t = self.table[y as usize];
                     replace_last_char(&mut self.ident, t);
@@ -201,5 +203,22 @@ fn replace_last_char(x: &mut String, c: char) {
 
         a.set_len(new_len);
         a.splice(start.., bytes(&c).iter().copied().filter(|a| *a != 0));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a() {
+        let mut ident_gen = IdentGen::new(&['a', 'b', 'c']);
+
+        
+        assert_eq!(ident_gen.next(), "a");
+        assert_eq!(ident_gen.next(), "b");
+        assert_eq!(ident_gen.next(), "c");
+        assert_eq!(ident_gen.next(), "ca");
+        assert_eq!(ident_gen.advance(-2), "b");
     }
 }
