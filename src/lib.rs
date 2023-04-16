@@ -175,35 +175,13 @@ impl<'a> Debug for IdentGen<'a> {
     }
 }
 
-fn bytes<T: ?Sized>(x: &T) -> &[u8] {
-    unsafe { core::slice::from_raw_parts(x as *const T as *const u8, core::mem::size_of_val(x)) }
-}
-
 fn get_last_char(x: &str) -> char {
     x.chars().last().unwrap()
 }
 
 fn replace_last_char(x: &mut String, c: char) {
-    let last = get_last_char(x);
-
-    let clen = c.len_utf8();
-    let llen = last.len_utf8();
-
-    let start = x.len() - llen;
-
-    unsafe {
-        let a = x.as_mut_vec();
-
-        let new_len = if clen > llen {
-            a.reserve((clen - llen).next_power_of_two());
-            a.len() + (clen - llen)
-        } else {
-            a.len() - (llen - clen)
-        };
-
-        a.set_len(new_len);
-        a.splice(start.., bytes(&c).iter().copied().filter(|a| *a != 0));
-    }
+    x.pop();
+    x.push(c);
 }
 
 #[cfg(test)]
