@@ -11,3 +11,8 @@ keywords = ["simple","ident","generator"]
 categories = ["no-std"]
 
 [dependencies]
+serde2 = {  optional = true, package = "serde", version = "1", features = ["derive"] }
+
+[features]
+serde = ["serde2", "std"]
+std = []

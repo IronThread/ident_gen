@@ -1,11 +1,20 @@
 //! Little crate exporting a generator of identifiers.
 
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(not(feature = "std"))]
 extern crate alloc;
 
-use alloc::string::String;
-use core::ops::{Deref, DerefMut};
+#[cfg(not(feature = "std"))]
+use alloc::{string::String, vec::Vec};
+
+use core::{
+    fmt::{self, Debug, Display, Formatter},
+    ops::{Deref, DerefMut},
+};
+
+#[cfg(feature = "serde")]
+use serde2::{Deserialize, Serialize};
 
 /// Identifier generator,it can generate all possible combinations for a table for all possible lengths
 /// in order,the default table it's [`DEFAULT_TABLE`].
@@ -17,14 +26,57 @@ pub struct IdentGen<'a> {
 /// All characters that are in the lower `snake_case` ascii standard.
 pub const DEFAULT_TABLE: &'static [char] = &[
     'a', 'b', 'c', 'd', 'f', 'e', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
-    't', 'u', 'v', 'w', 'x', 'z', '_'
+    't', 'u', 'v', 'w', 'x', 'z', '_',
 ];
 
 /// All characters that are in the upper `SNAKE_CASE` ascii standard.
 pub const UPPER_SNAKE: &'static [char] = &[
     'A', 'B', 'C', 'D', 'F', 'E', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S',
-    'T', 'U', 'V', 'W', 'X', 'Z', '_'
+    'T', 'U', 'V', 'W', 'X', 'Z', '_',
 ];
+
+fn advance(table: &[char], ident: &mut String, i: isize) {
+    if ident.len() == 0 {
+        if i > 0 {
+            ident.push(*table.first().unwrap());
+            advance(table, ident, i - 1)
+        }
+    } else if i != 0 {
+        let a = get_last_char(&ident);
+        let x = table.iter().copied().position(|y| a == y).unwrap();
+
+        let y = i + x as isize;
+
+        if i < 0 {
+            if y < 0 {
+                ident.pop();
+                advance(table, ident, i + 1)
+            } else {
+                let t = table[y as usize];
+                replace_last_char(ident, t);
+            }
+        } else if y >= table.len() as isize {
+            let mut t = *table.last().unwrap();
+            replace_last_char(ident, t);
+            t = *table.first().unwrap();
+            ident.push(t);
+            let tlen = table.len();
+            advance(table, ident, y - tlen as isize)
+        } else {
+            let t = table[y as usize];
+            replace_last_char(ident, t);
+        }
+    }
+}
+
+fn get_last_char(x: &str) -> char {
+    x.chars().last().unwrap()
+}
+
+fn replace_last_char(x: &mut String, c: char) {
+    x.pop();
+    x.push(c);
+}
 
 impl<'a> IdentGen<'a> {
     /// Creates a new instance with the specified table,using the default one if empty.
@@ -42,11 +94,11 @@ impl<'a> IdentGen<'a> {
 
     /// Sets a new table,if the new contents not contain the last character then the first one it's
     /// chosen when advancing.
-    /// 
+    ///
     /// This will not remove the previous lacking characters.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns a `None` when the table is empty otherwise returns `self`.
     #[inline]
     pub fn set_table(&mut self, table: &'a [char]) -> Option<&mut Self> {
@@ -77,57 +129,23 @@ impl<'a> IdentGen<'a> {
     /// In the case is positive gives you the `i`th possible combination since the one you got,
     /// and in the case of negative gives you the `i`th possible combination prior the one you got,
     ///modifying the underlying `String` and returning a `&str`.
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```
     /// use ident_gen::IdentGen;
-    /// 
+    ///
     /// let mut gen = IdentGen::default();
-    /// 
+    ///
     /// assert_eq!(gen.advance(1), "a");
     /// assert_eq!(gen.advance(2), "c");
     /// assert_eq!(gen.advance(-1), "b");
     /// ```
     #[inline]
     pub fn advance(&mut self, i: isize) -> &str {
-        if self.ident.len() == 0 {
-            if i > 0 {
-                self.ident.push(*self.table.first().unwrap());
-                self.advance(i - 1)
-            } else {
-                ""
-            }
-        } else if i == 0 {
-            &self.ident
-        } else { // ident = ca // i = -1
-            let a = get_last_char(&self.ident); // a table = [a,b,c]
-            let x = self.table.iter().copied().position(|y| a == y).unwrap(); // x = 0
+        advance(self.table, &mut self.ident, i);
 
-            let y = i + x as isize; // y = -1
-
-            if i < 0 {
-                if y < 0 {
-                    self.ident.pop();
-                    self.advance(i + 1)
-                } else {
-                    let t = self.table[y as usize];
-                    replace_last_char(&mut self.ident, t);
-                    &self.ident 
-                }
-            } else if y >= self.table.len() as isize {
-                let mut t = *self.table.last().unwrap();
-                replace_last_char(&mut self.ident, t);
-                t = *self.table.first().unwrap();
-                self.ident.push(t);
-                let tlen = self.table.len();
-                self.advance(y - tlen as isize) 
-            } else {
-                let t = self.table[y as usize];
-                replace_last_char(&mut self.ident, t);
-                &self.ident
-            }
-        }
+        &self.ident
     }
 
     /// Convenience for `self.ident.clear()`.
@@ -153,15 +171,12 @@ impl<'a> DerefMut for IdentGen<'a> {
     }
 }
 
-
 impl<'a> Default for IdentGen<'a> {
     #[inline]
     fn default() -> Self {
         Self::new(&[])
     }
 }
-
-use core::fmt::{self, Debug, Display, Formatter};
 
 impl<'a> Display for IdentGen<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -175,13 +190,110 @@ impl<'a> Debug for IdentGen<'a> {
     }
 }
 
-fn get_last_char(x: &str) -> char {
-    x.chars().last().unwrap()
+pub struct IdentGenOwned {
+    table: Vec<char>,
+    pub ident: String,
 }
 
-fn replace_last_char(x: &mut String, c: char) {
-    x.pop();
-    x.push(c);
+impl IdentGenOwned {
+    /// Creates a new instance with the specified table,populating the vec with the default one if empty.
+    #[inline]
+    pub fn new(mut table: Vec<char>) -> Self {
+        if table.is_empty() {
+            table.extend(DEFAULT_TABLE);
+        }
+
+        Self {
+            ident: String::new(),
+            table,
+        }
+    }
+
+    /// Creates a new instance with `x` characters as `table`.
+    pub fn from_str_table(x: &str) -> Self {
+        Self::new(x.chars().collect())
+    }
+
+    /// Convenience for `self.advance(1)`.
+    pub fn next(&mut self) -> &str {
+        self.advance(1)
+    }
+
+    /// Convenience for `self.advance(-1)`.
+    pub fn prev(&mut self) -> &str {
+        self.advance(-1)
+    }
+
+    /// In the case is positive gives you the `i`th possible combination since the one you got,
+    /// and in the case of negative gives you the `i`th possible combination prior the one you got,
+    ///modifying the underlying `String` and returning a `&str`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ident_gen::IdentGenOwned;
+    ///
+    /// let mut gen = IdentGenOwned::default();
+    ///
+    /// assert_eq!(gen.advance(1), "a");
+    /// assert_eq!(gen.advance(2), "c");
+    /// assert_eq!(gen.advance(-1), "b");
+    /// ```
+    #[inline]
+    pub fn advance(&mut self, i: isize) -> &str {
+        advance(&self.table[..], &mut self.ident, i);
+
+        &self.ident
+    }
+
+    /// Convenience for `self.ident.clear()`.
+    #[inline]
+    pub fn clear(&mut self) {
+        self.ident.clear()
+    }
+}
+
+/// Structure used to serialize and deserialize IdentGenOwned.
+#[cfg(feature = "serde")]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+struct IdentGenSerialize {
+    table: String,
+    ident: String,
+}
+
+impl Deref for IdentGenOwned {
+    type Target = str;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &*self.ident
+    }
+}
+
+impl DerefMut for IdentGenOwned {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut *self.ident
+    }
+}
+
+impl Default for IdentGenOwned {
+    #[inline]
+    fn default() -> Self {
+        Self::new(Vec::new())
+    }
+}
+
+impl Display for IdentGenOwned {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Display::fmt(&**self, f)
+    }
+}
+
+impl Debug for IdentGenOwned {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Debug::fmt(&**self, f)
+    }
 }
 
 #[cfg(test)]
@@ -192,7 +304,17 @@ mod tests {
     fn a() {
         let mut ident_gen = IdentGen::new(&['a', 'b', 'c']);
 
-        
+        assert_eq!(ident_gen.next(), "a");
+        assert_eq!(ident_gen.next(), "b");
+        assert_eq!(ident_gen.next(), "c");
+        assert_eq!(ident_gen.next(), "ca");
+        assert_eq!(ident_gen.advance(-2), "b");
+    }
+
+    #[test]
+    fn b() {
+        let mut ident_gen = IdentGenOwned::from_str_table("abc");
+
         assert_eq!(ident_gen.next(), "a");
         assert_eq!(ident_gen.next(), "b");
         assert_eq!(ident_gen.next(), "c");
