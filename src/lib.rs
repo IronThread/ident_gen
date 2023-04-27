@@ -255,7 +255,7 @@ impl IdentGenOwned {
 
 /// Structure used to serialize and deserialize IdentGenOwned.
 #[cfg(feature = "serde")]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 struct IdentGenSerialize {
     table: String,
     ident: String,
