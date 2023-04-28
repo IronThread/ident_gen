@@ -202,7 +202,6 @@ impl<'a> Serialize for IdentGen<'a> {
     }
 }
 
-
 #[cfg(feature = "serde")]
 impl Serialize for IdentGenOwned {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
