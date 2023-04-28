@@ -14,7 +14,7 @@ use core::{
 };
 
 #[cfg(feature = "serde")]
-use serde2::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Identifier generator,it can generate all possible combinations for a table for all possible lengths
 /// in order,the default table it's [`DEFAULT_TABLE`].
@@ -193,6 +193,33 @@ impl<'a> Debug for IdentGen<'a> {
 pub struct IdentGenOwned {
     table: Vec<char>,
     pub ident: String,
+}
+
+#[cfg(feature = "serde")]
+impl<'a> Serialize for IdentGen<'a> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        IdentGenSerialize { ident: self.ident.clone(), table: self.table.iter().collect() }.serialize(serializer)
+    }
+}
+
+
+#[cfg(feature = "serde")]
+impl Serialize for IdentGenOwned {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        IdentGenSerialize { ident: self.ident.clone(), table: self.table.iter().collect() }.serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'a> Deserialize<'a> for IdentGenOwned
+where Self: 'a
+{
+    fn deserialize<D: Deserializer<'a>>(deserializer: D) -> Result<Self, D::Error> {
+        IdentGenSerialize::deserialize(deserializer).map(|i|Self {
+            table: i.table.chars().collect(),
+            ident: i.ident            
+        })
+    }
 }
 
 impl IdentGenOwned {
